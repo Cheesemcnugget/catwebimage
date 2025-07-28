@@ -1,54 +1,41 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { createCanvas, loadImage } from 'canvas';
-import sharp from 'sharp';
-import multer from 'multer';
-import cors from 'cors';
+const { createCanvas, loadImage } = require('canvas');
+const sharp = require('sharp');
 
-// Configure multer for memory storage
-const upload = multer({ storage: multer.memoryStorage() });
+module.exports = async (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-// Helper to run multer middleware in Next.js
-const runMiddleware = (req, res, fn) => {
-  return new Promise((resolve, reject) => {
-    fn(req, res, (result) => {
-      if (result instanceof Error) {
-        return reject(result);
-      }
-      return resolve(result);
-    });
-  });
-};
-
-export const config = {
-  api: {
-    bodyParser: false, // Disallow body parsing, consume as stream
-  },
-};
-
-export default async function handler(req, res) {
-  // Enable CORS
-  await runMiddleware(req, res, cors());
+  // Handle OPTIONS request for CORS preflight
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Process the file upload
-    await runMiddleware(req, res, upload.single('image'));
+    // Get the image from the request body
+    const chunks = [];
+    for await (const chunk of req) {
+      chunks.push(chunk);
+    }
+    const buffer = Buffer.concat(chunks);
 
-    if (!req.file) {
+    if (!buffer || buffer.length === 0) {
       return res.status(400).json({ error: 'No image file provided' });
     }
 
     // Process the image
-    const result = await processImage(req.file.buffer);
+    const result = await processImage(buffer);
     return res.status(200).json(result);
   } catch (error) {
     console.error('Error processing image:', error);
     return res.status(500).json({ error: 'Error processing image' });
   }
-}
+};
 
 async function processImage(imageBuffer) {
   const fullWidth = 150;
